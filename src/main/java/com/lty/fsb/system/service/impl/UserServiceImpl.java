@@ -162,10 +162,11 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
     @Override
     @Transactional
-    public void regist(String username, String password) throws Exception {
+    public void regist(String username, String password,String phoneNum) throws Exception {
         User user = new User();
         user.setPassword(MD5Util.encrypt(username, password));
         user.setUsername(username);
+        user.setMobile(phoneNum);
         user.setCreateTime(new Date());
         user.setStatus(User.STATUS_VALID);
         user.setSsex(User.SEX_UNKNOW);

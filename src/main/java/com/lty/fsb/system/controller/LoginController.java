@@ -1,5 +1,6 @@
 package com.lty.fsb.system.controller;
 
+import com.alibaba.fastjson.JSON;
 import com.lty.fsb.common.annotation.Limit;
 import com.lty.fsb.common.authentication.JWTToken;
 import com.lty.fsb.common.authentication.JWTUtil;
@@ -9,6 +10,8 @@ import com.lty.fsb.common.domain.FsbResponse;
 import com.lty.fsb.common.exception.FsbGlobalException;
 import com.lty.fsb.common.properties.FsbProperties;
 import com.lty.fsb.common.service.RedisService;
+import com.lty.fsb.common.utils.sms.request.SmsSendRequest;
+import com.lty.fsb.common.utils.sms.util.ChuangLanSmsUtil;
 import com.lty.fsb.system.dao.LoginLogMapper;
 import com.lty.fsb.system.domain.LoginLog;
 import com.lty.fsb.system.domain.User;
@@ -19,6 +22,7 @@ import com.lty.fsb.system.service.UserService;
 import com.baomidou.mybatisplus.core.toolkit.StringPool;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lty.fsb.common.utils.*;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,6 +36,7 @@ import java.util.*;
 
 @Validated
 @RestController
+@Slf4j
 public class LoginController {
 
     @Autowired
@@ -155,8 +160,9 @@ public class LoginController {
     @PostMapping("regist")
     public void regist(
             @NotBlank(message = "{required}") String username,
+            @NotBlank(message = "{required}") String phoneNum,
             @NotBlank(message = "{required}") String password) throws Exception {
-        this.userService.regist(username, password);
+        this.userService.regist(username, password,phoneNum);
     }
 
     private String saveTokenToRedis(User user, JWTToken token, HttpServletRequest request) throws Exception {
@@ -207,5 +213,30 @@ public class LoginController {
         user.setPassword("it's a secret");
         userInfo.put("user", user);
         return userInfo;
+    }
+
+    @Autowired
+    Config config;
+
+    @PostMapping("getCaptcha")
+    public FsbResponse getCaptcha(String phoneNum) {
+        StringBuffer b = new StringBuffer();
+        for (int i = 0; i < 5; i++) {
+            int number=(int)(Math.random()*10);
+            b.append(number);
+        }
+        //String code = "11111";
+        String code = b.toString();
+        b.insert(0, "你的注册码为: ");
+        SmsSendRequest smsSingleRequest = new SmsSendRequest(
+                config.getChuanglan_account(), config.getChuanglan_password(),
+                b.toString(), phoneNum,"true");
+        log.info("发送短信:{} 给 {}", b.toString(), phoneNum);
+        String requestJson = JSON.toJSONString(smsSingleRequest);
+
+        String response = ChuangLanSmsUtil.sendSmsByPost(config.getChuanglan_url(), requestJson);
+        System.out.println(response);
+        return new FsbResponse().put("msgCode", code);
+
     }
 }
