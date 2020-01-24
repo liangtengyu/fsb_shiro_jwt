@@ -1,5 +1,6 @@
 package com.lty.fsb.system.service;
 
+import com.lty.fsb.common.domain.FsbResponse;
 import com.lty.fsb.common.domain.QueryRequest;
 import com.lty.fsb.system.domain.User;
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -82,7 +83,7 @@ public interface UserService extends IService<User> {
      * @param username 用户名
      * @param password 密码
      */
-    void regist(String username, String password,String phoneNum) throws Exception;
+    FsbResponse regist(String username, String password, String phoneNum, String verifyCode) throws Exception;
 
     /**
      * 重置密码

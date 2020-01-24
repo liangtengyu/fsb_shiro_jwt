@@ -8,6 +8,7 @@ import com.lty.fsb.common.domain.ActiveUser;
 import com.lty.fsb.common.domain.FsbConstant;
 import com.lty.fsb.common.domain.FsbResponse;
 import com.lty.fsb.common.exception.FsbGlobalException;
+import com.lty.fsb.common.exception.RedisConnectException;
 import com.lty.fsb.common.properties.FsbProperties;
 import com.lty.fsb.common.service.RedisService;
 import com.lty.fsb.common.utils.sms.request.SmsSendRequest;
@@ -23,11 +24,13 @@ import com.baomidou.mybatisplus.core.toolkit.StringPool;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lty.fsb.common.utils.*;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import sun.misc.BASE64Encoder;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.validation.constraints.NotBlank;
@@ -158,11 +161,12 @@ public class LoginController {
     }
 
     @PostMapping("regist")
-    public void regist(
+    public FsbResponse regist(
             @NotBlank(message = "{required}") String username,
             @NotBlank(message = "{required}") String phoneNum,
+            @NotBlank(message = "{required}") String verifyCode,
             @NotBlank(message = "{required}") String password) throws Exception {
-        this.userService.regist(username, password,phoneNum);
+        return userService.regist(username, password,phoneNum,verifyCode);
     }
 
     private String saveTokenToRedis(User user, JWTToken token, HttpServletRequest request) throws Exception {
@@ -219,7 +223,7 @@ public class LoginController {
     Config config;
 
     @PostMapping("getCaptcha")
-    public FsbResponse getCaptcha(String phoneNum) {
+    public FsbResponse getCaptcha(String phoneNum) throws RedisConnectException {
         StringBuffer b = new StringBuffer();
         for (int i = 0; i < 5; i++) {
             int number=(int)(Math.random()*10);
@@ -235,8 +239,10 @@ public class LoginController {
         String requestJson = JSON.toJSONString(smsSingleRequest);
 
         String response = ChuangLanSmsUtil.sendSmsByPost(config.getChuanglan_url(), requestJson);
-        System.out.println(response);
-        return new FsbResponse().put("msgCode", code);
+
+        redisService.set("verify-"+phoneNum + "-" + code, code,1000L*180L);
+        return new FsbResponse().put("msgCode", 00000);
 
     }
+
 }

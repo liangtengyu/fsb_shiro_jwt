@@ -1,8 +1,10 @@
 package com.lty.fsb.system.service.impl;
 
 import com.lty.fsb.common.domain.FsbConstant;
+import com.lty.fsb.common.domain.FsbResponse;
 import com.lty.fsb.common.domain.QueryRequest;
 import com.lty.fsb.common.service.CacheService;
+import com.lty.fsb.common.service.RedisService;
 import com.lty.fsb.common.utils.SortUtil;
 import com.lty.fsb.common.utils.MD5Util;
 import com.lty.fsb.system.dao.UserMapper;
@@ -20,6 +22,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,6 +35,8 @@ import java.util.List;
 @Service("userService")
 @Transactional(propagation = Propagation.SUPPORTS, readOnly = true, rollbackFor = Exception.class)
 public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements UserService {
+    @Autowired
+    private RedisService redisService;
 
     @Autowired
     private UserRoleMapper userRoleMapper;
@@ -162,17 +167,30 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
     @Override
     @Transactional
-    public void regist(String username, String password,String phoneNum) throws Exception {
-        User user = new User();
-        user.setPassword(MD5Util.encrypt(username, password));
-        user.setUsername(username);
-        user.setMobile(phoneNum);
-        user.setCreateTime(new Date());
-        user.setStatus(User.STATUS_VALID);
-        user.setSsex(User.SEX_UNKNOW);
-        user.setAvatar(User.DEFAULT_AVATAR);
-        user.setDescription("注册用户");
-        this.save(user);
+    public FsbResponse regist(String username, String password, String phoneNum, String verifyCode) throws Exception {
+        String userVerifyCodeId = "verify-" + phoneNum + "-" + verifyCode;
+        String code = redisService.get(userVerifyCodeId);
+        if (code == null) {
+            log.info("没有这个用户的验证码"+userVerifyCodeId);
+            return new FsbResponse().put("code", "-1").put("msg", "验证码不存在 或 验证码失效!!!");
+        }
+
+        User user = null;
+        try {
+            user = new User();
+            user.setPassword(MD5Util.encrypt(username, password));
+            user.setUsername(username);
+            user.setMobile(phoneNum);
+            user.setCreateTime(new Date());
+            user.setStatus(User.STATUS_VALID);
+            user.setSsex(User.SEX_UNKNOW);
+            user.setAvatar(User.DEFAULT_AVATAR);
+            user.setDescription("注册用户");
+            this.save(user);
+        } catch (DuplicateKeyException e) {
+            log.info("此手机号已被注册-- "+phoneNum);
+            return new FsbResponse().put("code", "-1").put("msg", "此手机号已被注册!!!");
+        }
 
         UserRole ur = new UserRole();
         ur.setUserId(user.getUserId());
@@ -183,7 +201,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         userConfigService.initDefaultUserConfig(String.valueOf(user.getUserId()));
         // 将用户相关信息保存到 Redis中
         userManager.loadUserRedisCache(user);
-
+        return new FsbResponse().put("code", "00").put("msg", "注册成功");
     }
 
     @Override
